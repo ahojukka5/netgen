@@ -16,6 +16,7 @@ option( USE_NATIVE_ARCH  "build for native cpu architecture" ON)
 
 option( USE_GUI     "build with GUI" ON )
 option( USE_PYTHON  "build with python interface" ON )
+option( USE_JULIA   "build experimental Julia interface (CxxWrap/JlCxx)" OFF )
 cmake_dependent_option( PREFER_SYSTEM_PYBIND11  "Use system wide PyBind11" OFF "USE_PYTHON" OFF)
 option( USE_MPI     "enable mpi parallelization" OFF )
 option( USE_MPI_WRAPPER "enable mpi wrapper (run-time dispatch of MPI library calls)" OFF )
@@ -599,6 +600,10 @@ if (USE_PYTHON)
   add_subdirectory(python)
 endif (USE_PYTHON)
 
+if (USE_JULIA)
+  add_subdirectory(julia)
+endif (USE_JULIA)
+
 #######################################################################
 # Debian packager
 
@@ -734,6 +739,7 @@ message("
     GUI: ............... ${USE_GUI}
     MPI: ............... ${USE_MPI}
     PYTHON: ............ ${USE_PYTHON}
+    JULIA: ............. ${USE_JULIA}
 
 
   Building: ")
