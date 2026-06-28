@@ -79,6 +79,56 @@ m2 = NetgenJL.load_mesh(tmp)
 @assert NetgenJL.num_surface_elements(m2) == NetgenJL.num_surface_elements(m)
 rm(tmp; force=true)
 
+# Empty-mesh bulk extraction returns consistent empty arrays.
+@assert length(NetgenJL.point_coordinates_flat(m)) == 0
+@assert length(NetgenJL.volume_connectivity_flat(m)) == 0
+@assert length(NetgenJL.surface_connectivity_flat(m)) == 0
+@assert length(NetgenJL.volume_element_types(m)) == 0
+
+# --- Sprint 3: read-only content extraction from a non-empty mesh -----------
+# Deterministic single unit tetrahedron (4 points, 1 tet, 4 triangular faces).
+# Connectivity returned to Julia is 1-based (Netgen PointIndex BASE=1 preserved);
+# 0 is padding. Coordinates are flat point-major; reshape to 3 x np.
+tet = NetgenJL.make_unit_tet_mesh()
+@assert NetgenJL.num_points(tet) == 4
+@assert NetgenJL.num_volume_elements(tet) == 1
+@assert NetgenJL.num_surface_elements(tet) == 4
+
+# Coordinates: 3 x 4 matrix (column j = point j).
+coords = reshape(NetgenJL.point_coordinates_flat(tet), 3, 4)
+@assert coords isa Matrix{Float64}
+@assert coords[:, 1] == [0.0, 0.0, 0.0]
+@assert coords[:, 2] == [1.0, 0.0, 0.0]
+@assert coords[:, 3] == [0.0, 1.0, 0.0]
+@assert coords[:, 4] == [0.0, 0.0, 1.0]
+
+# Volume connectivity: stride x ne, here 4 x 1; one TET with nodes 1,2,3,4.
+vconn = reshape(NetgenJL.volume_connectivity_flat(tet), :, 1)
+vtypes = NetgenJL.volume_element_types(tet)
+@assert vec(vconn) == [1, 2, 3, 4]
+@assert collect(vtypes) == Int32[20]                 # 20 == TET
+@assert NetgenJL.element_type_name(vtypes[1]) == "TET"
+
+# Surface connectivity: stride x nse, here 3 x 4; four TRIG faces, face index 1.
+sconn = reshape(NetgenJL.surface_connectivity_flat(tet), :, 4)
+stypes = NetgenJL.surface_element_types(tet)
+sidx = NetgenJL.surface_element_indices(tet)
+@assert size(sconn) == (3, 4)
+@assert all(==(10), collect(stypes))                 # 10 == TRIG
+@assert all(==(1), collect(sidx))
+@assert NetgenJL.element_type_name(stypes[1]) == "TRIG"
+@assert all(1 .<= vec(sconn) .<= 4)                  # all node indices in 1..np
+
+# Save/load roundtrip must preserve extracted contents.
+tmp2 = tempname() * ".vol"
+NetgenJL.save_mesh(tet, tmp2)
+tet2 = NetgenJL.load_mesh(tmp2)
+@assert NetgenJL.num_points(tet2) == 4
+@assert reshape(NetgenJL.point_coordinates_flat(tet2), 3, 4) == coords
+@assert reshape(NetgenJL.volume_connectivity_flat(tet2), :, 1) == vconn
+@assert reshape(NetgenJL.surface_connectivity_flat(tet2), :, 4) == sconn
+rm(tmp2; force=true)
+
 println("Netgen Julia smoke test passed:")
 println("  netgen_julia_smoke() = ", NetgenJL.netgen_julia_smoke())
 println("  netgen_julia_hello() = \"", NetgenJL.netgen_julia_hello(), "\"")
@@ -89,3 +139,8 @@ println("  MeshingParameters.maxh = ", NetgenJL.maxh(mp), ", grading = ", Netgen
 println("  Mesh (empty) np/ne/nse = ", NetgenJL.num_points(m), "/",
         NetgenJL.num_volume_elements(m), "/", NetgenJL.num_surface_elements(m),
         "; save/load roundtrip OK")
+println("  Unit tet np/ne/nse   = ", NetgenJL.num_points(tet), "/",
+        NetgenJL.num_volume_elements(tet), "/", NetgenJL.num_surface_elements(tet))
+println("  Tet volume element   = ", vec(vconn), " (", NetgenJL.element_type_name(vtypes[1]),
+        ", 1-based); surface = 4x ", NetgenJL.element_type_name(stypes[1]),
+        "; extraction roundtrip OK")
