@@ -35,9 +35,37 @@ module NetgenJL
     end
 end
 
+# --- Sprint 0: trivial smoke functions -------------------------------------
 @assert NetgenJL.netgen_julia_smoke() == 42
 @assert NetgenJL.netgen_julia_hello() == "netgen-julia-ok"
 
-println("Netgen Julia smoke test passed: ",
-        "netgen_julia_smoke()=", NetgenJL.netgen_julia_smoke(),
-        ", netgen_julia_hello()=\"", NetgenJL.netgen_julia_hello(), "\"")
+# --- Sprint 1: netgen::Point3d ---------------------------------------------
+p = NetgenJL.Point3d(1.0, 2.0, 3.0)
+@assert NetgenJL.x(p) == 1.0
+@assert NetgenJL.y(p) == 2.0
+@assert NetgenJL.z(p) == 3.0
+
+# --- Sprint 1: netgen::Vec3d -----------------------------------------------
+v = NetgenJL.Vec3d(3.0, 0.0, 4.0)
+@assert NetgenJL.x(v) == 3.0
+@assert NetgenJL.y(v) == 0.0
+@assert NetgenJL.z(v) == 4.0
+@assert NetgenJL.length(v) == 5.0
+
+# --- Sprint 1: netgen::MeshingParameters -----------------------------------
+mp = NetgenJL.MeshingParameters()
+NetgenJL.set_maxh!(mp, 0.25)
+@assert NetgenJL.maxh(mp) == 0.25
+NetgenJL.set_grading!(mp, 0.4)
+@assert NetgenJL.grading(mp) == 0.4
+@assert NetgenJL.secondorder(mp) == false
+NetgenJL.set_secondorder!(mp, true)
+@assert NetgenJL.secondorder(mp) == true
+
+println("Netgen Julia smoke test passed:")
+println("  netgen_julia_smoke() = ", NetgenJL.netgen_julia_smoke())
+println("  netgen_julia_hello() = \"", NetgenJL.netgen_julia_hello(), "\"")
+println("  Point3d(1,2,3)       = (", NetgenJL.x(p), ", ", NetgenJL.y(p), ", ", NetgenJL.z(p), ")")
+println("  Vec3d(3,0,4) length  = ", NetgenJL.length(v))
+println("  MeshingParameters.maxh = ", NetgenJL.maxh(mp), ", grading = ", NetgenJL.grading(mp),
+        ", secondorder = ", NetgenJL.secondorder(mp))
