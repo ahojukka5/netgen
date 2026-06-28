@@ -14,7 +14,7 @@
 
 find_package(JlCxx CONFIG REQUIRED)
 
-add_library(ngjl SHARED netgenjl.cpp julia_meshing.cpp)
+add_library(ngjl SHARED netgenjl.cpp julia_meshing.cpp julia_mesh.cpp)
 target_compile_features(ngjl PRIVATE cxx_std_17)
 # JlCxx for the binding glue; nglib provides the out-of-line Netgen symbols
 # (e.g. MeshingParameters' constructor). Point3d/Vec3d are header-only.

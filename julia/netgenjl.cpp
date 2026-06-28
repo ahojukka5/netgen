@@ -13,6 +13,7 @@
 #include <jlcxx/jlcxx.hpp>
 
 #include "julia_meshing.hpp"
+#include "julia_mesh.hpp"
 
 namespace netgen_julia
 {
@@ -36,4 +37,7 @@ JLCXX_MODULE define_julia_module(jlcxx::Module& mod)
 
   // First real value-type bindings (Point3d, Vec3d, MeshingParameters).
   netgen_julia::ExportJuliaMeshing(mod);
+
+  // Minimal Mesh handle (shared_ptr lifetime), load/save and count queries.
+  netgen_julia::ExportJuliaMesh(mod);
 }
