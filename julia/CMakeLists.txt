@@ -14,9 +14,11 @@
 
 find_package(JlCxx CONFIG REQUIRED)
 
-add_library(ngjl SHARED netgenjl.cpp)
+add_library(ngjl SHARED netgenjl.cpp julia_meshing.cpp)
 target_compile_features(ngjl PRIVATE cxx_std_17)
-target_link_libraries(ngjl PRIVATE JlCxx::cxxwrap_julia)
+# JlCxx for the binding glue; nglib provides the out-of-line Netgen symbols
+# (e.g. MeshingParameters' constructor). Point3d/Vec3d are header-only.
+target_link_libraries(ngjl PRIVATE JlCxx::cxxwrap_julia nglib)
 
 # Netgen builds with hidden symbol visibility by default (CMAKE_CXX_VISIBILITY_PRESET
 # in the top-level CMakeLists.txt). CxxWrap/JlCxx relies on *default* visibility so

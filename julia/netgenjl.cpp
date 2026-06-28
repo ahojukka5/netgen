@@ -12,6 +12,8 @@
 
 #include <jlcxx/jlcxx.hpp>
 
+#include "julia_meshing.hpp"
+
 namespace netgen_julia
 {
   // Trivial smoke function: returns a fixed value Julia can assert on.
@@ -31,4 +33,7 @@ JLCXX_MODULE define_julia_module(jlcxx::Module& mod)
 {
   mod.method("netgen_julia_smoke", &netgen_julia::netgen_julia_smoke);
   mod.method("netgen_julia_hello", &netgen_julia::netgen_julia_hello);
+
+  // First real value-type bindings (Point3d, Vec3d, MeshingParameters).
+  netgen_julia::ExportJuliaMeshing(mod);
 }
