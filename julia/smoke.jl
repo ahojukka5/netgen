@@ -62,6 +62,23 @@ NetgenJL.set_grading!(mp, 0.4)
 NetgenJL.set_secondorder!(mp, true)
 @assert NetgenJL.secondorder(mp) == true
 
+# --- Sprint 2: netgen::Mesh handle (shared_ptr), counts, save/load ----------
+m = NetgenJL.new_mesh()
+@assert NetgenJL.num_points(m) == 0
+@assert NetgenJL.num_volume_elements(m) == 0
+@assert NetgenJL.num_surface_elements(m) == 0
+@assert NetgenJL.num_segments(m) == 0
+
+# Save/load roundtrip of the (empty) mesh through a temporary .vol file.
+tmp = tempname() * ".vol"
+NetgenJL.save_mesh(m, tmp)
+@assert isfile(tmp)
+m2 = NetgenJL.load_mesh(tmp)
+@assert NetgenJL.num_points(m2) == NetgenJL.num_points(m)
+@assert NetgenJL.num_volume_elements(m2) == NetgenJL.num_volume_elements(m)
+@assert NetgenJL.num_surface_elements(m2) == NetgenJL.num_surface_elements(m)
+rm(tmp; force=true)
+
 println("Netgen Julia smoke test passed:")
 println("  netgen_julia_smoke() = ", NetgenJL.netgen_julia_smoke())
 println("  netgen_julia_hello() = \"", NetgenJL.netgen_julia_hello(), "\"")
@@ -69,3 +86,6 @@ println("  Point3d(1,2,3)       = (", NetgenJL.x(p), ", ", NetgenJL.y(p), ", ", 
 println("  Vec3d(3,0,4) length  = ", NetgenJL.length(v))
 println("  MeshingParameters.maxh = ", NetgenJL.maxh(mp), ", grading = ", NetgenJL.grading(mp),
         ", secondorder = ", NetgenJL.secondorder(mp))
+println("  Mesh (empty) np/ne/nse = ", NetgenJL.num_points(m), "/",
+        NetgenJL.num_volume_elements(m), "/", NetgenJL.num_surface_elements(m),
+        "; save/load roundtrip OK")
