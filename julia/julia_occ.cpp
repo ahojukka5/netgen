@@ -53,8 +53,14 @@ namespace netgen_julia
     // type, so this coexists with the CSGeometry generate_mesh. GenerateMesh is
     // the (inherited) NetgenGeometry method, dispatched through OCCGeometry's
     // exported vtable; it allocates and fills the mesh.
+    //
+    // Unlike the CSG path (which passes the geometry into CSGGenerateMesh), the
+    // OCC surface mesher retrieves the geometry from mesh->GetGeometry() and
+    // dynamic_casts it to OCCGeometry&, so we must attach it first; otherwise
+    // meshing throws std::bad_cast. We pre-create the mesh to set its geometry.
     mod.method("generate_mesh", [](const OCCPtr& geo, MeshingParameters& mp) -> MeshPtr {
-      MeshPtr mesh;
+      auto mesh = std::make_shared<Mesh>();
+      mesh->SetGeometry(geo);
       geo->GenerateMesh(mesh, mp);
       return mesh;
     });
