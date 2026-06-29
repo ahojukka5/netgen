@@ -14,7 +14,11 @@ It is disabled by default and is not part of a normal Netgen build.
   * meshing value types: `Point3d`, `Vec3d`, `MeshingParameters`;
   * a `std::shared_ptr<Mesh>` handle with load/save and read-only bulk
     extraction of coordinates and element connectivity/types;
-  * a minimal CSG mesh-generation path (axis-aligned box → `GenerateMesh`).
+  * a minimal CSG mesh-generation path (axis-aligned box, sphere → `GenerateMesh`)
+    and optional OCC file import;
+  * geometry-aware uniform refinement with refinement-hierarchy parent maps;
+  * generic topology / incidence: global edges and faces, element→edge/face
+    maps, edge orientation signs, and the surface→face map.
 
 It is **not** a full Netgen Julia API.
 

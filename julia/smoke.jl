@@ -277,6 +277,55 @@ NetgenJL.uniform_refine!(sm1)
 sphere_err = maximum(abs.(boundary_radii(sm1, 0.0, 0.0, 0.0) .- 1.0))
 @assert sphere_err < 1e-6        # boundary nodes snapped to the sphere
 
+# --- Sprint 8: topology / incidence -----------------------------------------
+# Unit tetrahedron: 6 global edges, 4 global faces.
+@assert NetgenJL.num_edges(tet) == 6
+@assert NetgenJL.num_faces(tet) == 4
+tedges = reshape(NetgenJL.edge_connectivity_flat(tet), 2, 6)
+@assert all(tedges[1, :] .< tedges[2, :])            # canonical ascending endpoints
+@assert all(1 .<= tedges .<= 4)
+tfaces = reshape(NetgenJL.face_connectivity_flat(tet), :, 4)
+@assert size(tfaces, 1) == 3                         # all triangular faces
+@assert all(1 .<= tfaces .<= 4)
+tve = reshape(NetgenJL.volume_to_edge_flat(tet), 6, 1)
+tvf = reshape(NetgenJL.volume_to_face_flat(tet), 4, 1)
+@assert sort(vec(tve)) == collect(1:6)               # each global edge once
+@assert sort(vec(tvf)) == collect(1:4)               # each global face once
+ts2f = NetgenJL.surface_to_face_flat(tet)
+@assert length(ts2f) == 4 && all(1 .<= ts2f .<= 4)
+@assert NetgenJL.num_domains(tet) == 1
+
+# Rigorous edge-orientation check using Netgen's TET local edge table (1-based
+# local vertex pairs, matching MeshTopology::GetEdges1(TET)).
+tet_local_edges = [(4, 1), (4, 2), (4, 3), (1, 2), (1, 3), (2, 3)]
+tconn = reshape(NetgenJL.volume_connectivity_flat(tet), :, 1)[:, 1]   # 4 node ids
+torient = reshape(NetgenJL.volume_to_edge_orientation_flat(tet), 6, 1)
+for k in 1:6
+    l0, l1 = tet_local_edges[k]
+    pa, pb = tconn[l0], tconn[l1]                    # element local edge endpoints
+    g = tve[k]; ga, gb = tedges[1, g], tedges[2, g]  # canonical global edge
+    @assert Set((pa, pb)) == Set((ga, gb))           # same edge
+    @assert torient[k] == (pa == ga && pb == gb ? 1 : -1)
+end
+
+# Generated CSG cube: topology valid; global faces cover the boundary.
+t0 = NetgenJL.generate_mesh(geo, genmp)
+tne0 = NetgenJL.num_edges(t0); tnf0 = NetgenJL.num_faces(t0)
+tnvol = NetgenJL.num_volume_elements(t0)
+@assert tne0 > 0 && tnf0 > 0
+@assert tnf0 >= NetgenJL.num_surface_elements(t0)
+@assert length(NetgenJL.volume_to_edge_flat(t0)) == 6 * tnvol      # all tets, stride 6
+@assert length(NetgenJL.volume_to_face_flat(t0)) == 4 * tnvol
+@assert all(1 .<= NetgenJL.volume_to_edge_flat(t0) .<= tne0)
+@assert all(1 .<= NetgenJL.volume_to_face_flat(t0) .<= tnf0)
+@assert all(1 .<= NetgenJL.surface_to_face_flat(t0) .<= tnf0)
+
+# Topology stays valid (and rebuilds) after geometry-aware refinement.
+NetgenJL.uniform_refine!(t0)
+@assert NetgenJL.num_edges(t0) > tne0
+@assert NetgenJL.num_faces(t0) > tnf0
+@assert all(1 .<= NetgenJL.volume_to_edge_flat(t0) .<= NetgenJL.num_edges(t0))
+
 # --- Sprint 5: optional OCC import (present only if built with USE_OCC) ------
 # Skipped cleanly if OCC was not compiled in or no fixture is provided via
 # NGJL_OCC_FIXTURE (e.g. an existing tracked file such as tutorials/screw.step).
@@ -318,10 +367,15 @@ if isdefined(NetgenJL, :load_occ_geometry)
         @assert ogeo_u !== nothing
         rm(upper; force=true)
 
+        # Topology extraction works on the OCC-generated mesh.
+        @assert NetgenJL.num_edges(omesh) > 0
+        @assert NetgenJL.num_faces(omesh) >= NetgenJL.num_surface_elements(omesh)
+
         # Uniform refinement also works on an OCC-generated mesh.
         NetgenJL.uniform_refine!(omesh)
         @assert NetgenJL.num_points(omesh) > onp
         @assert NetgenJL.num_surface_elements(omesh) > onse
+        @assert NetgenJL.num_edges(omesh) > 0          # topology valid after refine
 
         occ_summary = "$(basename(fixture)) -> np/ne/nse = $onp/$one/$onse " *
                       "(roundtrip OK; uppercase-ext OK; refine -> $(NetgenJL.num_points(omesh)) pts)"
@@ -352,4 +406,7 @@ println("  Hierarchy: geometry='", NetgenJL.geometry_type_name(h1), "', levels "
         " midpoints; P1 nodal transfer max err = ", p1_err)
 println("  Curved refine: sphere boundary nodes stay on r=1 after refine ",
         "(max |r-1| = ", sphere_err, ", geometry-aware snapping)")
+println("  Topology: unit tet 6 edges / 4 faces (edge orientations verified); ",
+        "CSG cube edges ", tne0, " -> ", NetgenJL.num_edges(t0),
+        ", faces ", tnf0, " -> ", NetgenJL.num_faces(t0), " under refine")
 println("  OCC import: ", occ_summary)
