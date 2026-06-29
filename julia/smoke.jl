@@ -169,6 +169,43 @@ genrt = NetgenJL.load_mesh(gtmp)
 @assert NetgenJL.num_surface_elements(genrt) == gnse
 rm(gtmp; force=true)
 
+# --- Sprint 5: optional OCC import (present only if built with USE_OCC) ------
+# Skipped cleanly if OCC was not compiled in or no fixture is provided via
+# NGJL_OCC_FIXTURE (e.g. an existing tracked file such as tutorials/screw.step).
+occ_summary = "not built (USE_OCC=OFF)"
+if isdefined(NetgenJL, :load_occ_geometry)
+    fixture = get(ENV, "NGJL_OCC_FIXTURE", "")
+    if isempty(fixture)
+        occ_summary = "built; smoke skipped (set NGJL_OCC_FIXTURE)"
+    else
+        @assert isfile(fixture)
+        ogeo = NetgenJL.load_occ_geometry(fixture)
+        ompp = NetgenJL.MeshingParameters()
+        omesh = NetgenJL.generate_mesh(ogeo, ompp)
+        onp = NetgenJL.num_points(omesh)
+        one = NetgenJL.num_volume_elements(omesh)
+        onse = NetgenJL.num_surface_elements(omesh)
+        @assert onp > 0
+        @assert onse > 0
+
+        # Sprint 3 extraction works on the OCC-generated mesh.
+        ocoords = reshape(NetgenJL.point_coordinates_flat(omesh), 3, onp)
+        @assert size(ocoords) == (3, onp)
+        @assert length(NetgenJL.surface_element_types(omesh)) == onse
+        @assert length(NetgenJL.surface_connectivity_flat(omesh)) > 0
+
+        # save/load roundtrip preserves counts.
+        otmp = tempname() * ".vol"
+        NetgenJL.save_mesh(omesh, otmp)
+        omesh2 = NetgenJL.load_mesh(otmp)
+        @assert NetgenJL.num_points(omesh2) == onp
+        @assert NetgenJL.num_surface_elements(omesh2) == onse
+        rm(otmp; force=true)
+
+        occ_summary = "$(basename(fixture)) -> np/ne/nse = $onp/$one/$onse (roundtrip OK)"
+    end
+end
+
 println("Netgen Julia smoke test passed:")
 println("  netgen_julia_smoke() = ", NetgenJL.netgen_julia_smoke())
 println("  netgen_julia_hello() = \"", NetgenJL.netgen_julia_hello(), "\"")
@@ -186,3 +223,4 @@ println("  Tet volume element   = ", vec(vconn), " (", NetgenJL.element_type_nam
         "; extraction roundtrip OK")
 println("  CSG unit cube (maxh 0.5) np/ne/nse = ", gnp, "/", gne, "/", gnse,
         " (all TET/TRIG); generated-mesh roundtrip OK")
+println("  OCC import: ", occ_summary)

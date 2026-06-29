@@ -33,6 +33,25 @@ julia julia/smoke.jl <build>/julia/libngjl.dylib
 `USE_JULIA=ON` currently requires `USE_CSG=ON` (configure fails with a clear
 message otherwise), because the binding includes CSG mesh generation.
 
+### Optional OCC (OpenCASCADE) support
+
+OCC import is conditional on `USE_OCC`. The non-OCC binding always builds; OCC
+file import (`load_occ_geometry`) appears only when `USE_OCC=ON`:
+
+```bash
+cmake -DUSE_JULIA=ON -DUSE_CSG=ON -DUSE_OCC=ON \
+      -DJlCxx_DIR="$JLCXX" -DOpenCASCADE_DIR=<occ-cmake-dir> ...
+cmake --build <build> --target ngjl
+# OCC smoke is opt-in: point it at a small CAD file (the repo ships a couple):
+NGJL_OCC_FIXTURE=tutorials/screw.step julia julia/smoke.jl <build>/julia/libngjl.dylib
+```
+
+Unlike CSG, the OCC binding needs **no new exported symbols**: the `OCCGeometry`
+class and the `LoadOCC_STEP/BREP/IGES` loaders are already `DLL_HEADER`-exported
+by `nglib`. The Julia OCC glue is built only when `USE_OCC=ON`
+(`julia_occ.cpp`, guarded by the `NGJL_HAS_OCC` compile definition) and links
+the OpenCASCADE libraries via Netgen's `occ_libs` target.
+
 ## Symbol visibility / export notes
 
 Two visibility details are worth understanding for review:
