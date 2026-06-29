@@ -601,6 +601,12 @@ if (USE_PYTHON)
 endif (USE_PYTHON)
 
 if (USE_JULIA)
+  # The experimental Julia binding currently includes CSG mesh-generation
+  # support, so it requires the CSG kernel. Fail loudly rather than silently
+  # enabling USE_CSG. (OCC support, when present, is conditional on USE_OCC.)
+  if (NOT USE_CSG)
+    message(FATAL_ERROR "USE_JULIA currently requires USE_CSG because the experimental Julia binding includes CSG mesh-generation support. Reconfigure with -DUSE_CSG=ON or split the Julia CSG target.")
+  endif (NOT USE_CSG)
   add_subdirectory(julia)
 endif (USE_JULIA)
 
