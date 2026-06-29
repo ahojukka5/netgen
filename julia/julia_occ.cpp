@@ -1,5 +1,7 @@
 #include "julia_occ.hpp"
 
+#include <algorithm>
+#include <cctype>
 #include <stdexcept>
 #include <string>
 
@@ -19,6 +21,14 @@ namespace netgen_julia
 
   namespace
   {
+    // Lowercased copy, so extension dispatch is case-insensitive (.STEP == .step).
+    std::string to_lower(std::string s)
+    {
+      std::transform(s.begin(), s.end(), s.begin(),
+                     [](unsigned char c) { return std::tolower(c); });
+      return s;
+    }
+
     bool ends_with(const std::string& s, const std::string& suffix)
     {
       return s.size() >= suffix.size() &&
@@ -35,17 +45,18 @@ namespace netgen_julia
     // return a fully set-up OCCGeometry* (BuildFMap/CalcBoundingBox done); we
     // adopt it into a shared_ptr (the holder Python also uses).
     mod.method("load_occ_geometry", [](const std::string& filename) -> OCCPtr {
+      const std::string ext = to_lower(filename);
       OCCPtr geo;
-      if (ends_with(filename, ".step") || ends_with(filename, ".stp"))
+      if (ends_with(ext, ".step") || ends_with(ext, ".stp"))
         geo.reset(netgen::LoadOCC_STEP(filename));
-      else if (ends_with(filename, ".brep"))
+      else if (ends_with(ext, ".brep"))
         geo.reset(netgen::LoadOCC_BREP(filename));
-      else if (ends_with(filename, ".iges") || ends_with(filename, ".igs"))
+      else if (ends_with(ext, ".iges") || ends_with(ext, ".igs"))
         geo.reset(netgen::LoadOCC_IGES(filename));
       else
         throw std::runtime_error(
             "Unsupported OCC file '" + filename +
-            "' (expected .step/.stp/.brep/.iges/.igs)");
+            "' (expected .step/.stp/.brep/.iges/.igs, case-insensitive)");
       return geo;
     });
 

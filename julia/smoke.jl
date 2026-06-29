@@ -202,7 +202,15 @@ if isdefined(NetgenJL, :load_occ_geometry)
         @assert NetgenJL.num_surface_elements(omesh2) == onse
         rm(otmp; force=true)
 
-        occ_summary = "$(basename(fixture)) -> np/ne/nse = $onp/$one/$onse (roundtrip OK)"
+        # Extension dispatch is case-insensitive: load via an uppercased copy
+        # (succeeds without throwing on the unsupported-extension path).
+        upper = tempname() * uppercase(splitext(fixture)[2])
+        cp(fixture, upper)
+        ogeo_u = NetgenJL.load_occ_geometry(upper)
+        @assert ogeo_u !== nothing
+        rm(upper; force=true)
+
+        occ_summary = "$(basename(fixture)) -> np/ne/nse = $onp/$one/$onse (roundtrip OK; uppercase-ext OK)"
     end
 end
 
