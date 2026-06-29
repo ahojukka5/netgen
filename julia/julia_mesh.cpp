@@ -14,6 +14,7 @@ namespace netgen_julia
   using netgen::Element2d;
   using netgen::Segment;
   using netgen::ELEMENT_TYPE;
+  using netgen::PointIndex;
   using MeshPtr = std::shared_ptr<Mesh>;
 
   namespace
@@ -233,7 +234,8 @@ namespace netgen_julia
     // place.
     mod.method("copy_mesh", [](const MeshPtr& m) -> MeshPtr {
       auto c = std::make_shared<Mesh>();
-      *c = *m;
+      *c = *m;                    // copies points/elements and the geometry handle
+      c->geomtype = m->geomtype;  // operator= does not copy the geomtype tag
       return c;
     });
 
@@ -245,6 +247,107 @@ namespace netgen_julia
     // mlparentsurfaceelement arrays) for possible later extraction.
     mod.method("uniform_refine!", [](const MeshPtr& m) {
       m->GetGeometry()->GetRefinement().Refine(*m);
+    });
+
+    // --- geometry diagnostics ----------------------------------------------
+    // Broad kind of geometry the mesh was generated from. Mesh::GetGeometry()
+    // never returns null (it falls back to a default geometry), so we report the
+    // mesh's own geomtype tag instead: "csg", "occ", "2d", "stl", "acis", or
+    // "none" (default / no explicit geometry, e.g. new_mesh / load_mesh).
+    mod.method("geometry_type_name", [](const MeshPtr& m) -> std::string {
+      switch (m->geomtype)
+      {
+        case Mesh::GEOM_2D:   return "2d";
+        case Mesh::GEOM_CSG:  return "csg";
+        case Mesh::GEOM_STL:  return "stl";
+        case Mesh::GEOM_OCC:  return "occ";
+        case Mesh::GEOM_ACIS: return "acis";
+        default:              return "none";
+      }
+    });
+    mod.method("has_geometry", [](const MeshPtr& m) {
+      return m->geomtype != Mesh::NO_GEOM;
+    });
+
+    // --- refinement hierarchy / parent maps --------------------------------
+    // Point ancestry from uniform refinement (Mesh::mlbetweennodes). Flat layout
+    // [a1,b1, a2,b2, ...]; reshape to 2 x num_points. Conventions:
+    //   * ids are 1-based and index points of the immediately coarser level,
+    //   * a coarse/original point p is reported as [p, p],
+    //   * a new midpoint between coarse points a,b is [a, b] with a != b.
+    // Netgen marks originals with invalid sentinels internally; we normalize
+    // those to [p, p] so no C++ sentinel leaks to Julia. Before any refinement
+    // the array is empty, so every point maps to itself.
+    mod.method("point_parent_vertices_flat", [](const MeshPtr& m) {
+      jlcxx::Array<int64_t> out;
+      const auto& mbn = m->mlbetweennodes;
+      const bool have = mbn.Size() >= static_cast<size_t>(m->GetNP());
+      for (PointIndex pi : m->Points().Range())
+      {
+        int64_t self = static_cast<int64_t>(pi);  // 1-based (PointIndex BASE=1)
+        if (have)
+        {
+          auto pr = mbn[pi];
+          if (pr.I1().IsValid() && pr.I2().IsValid())
+          {
+            out.push_back(static_cast<int64_t>(pr.I1()));
+            out.push_back(static_cast<int64_t>(pr.I2()));
+            continue;
+          }
+        }
+        out.push_back(self);
+        out.push_back(self);
+      }
+      return out;
+    });
+
+    // Parent volume-element id per element (Mesh::mlparentelement), 1-based.
+    // NOTE: Netgen populates this only on the bisection refinement path; uniform
+    // refinement does not record element ancestry, so after uniform_refine! the
+    // array is empty and every element maps to itself (identity / root). Always
+    // length num_volume_elements, values in 1:num_volume_elements.
+    mod.method("volume_parent_indices", [](const MeshPtr& m) {
+      jlcxx::Array<int64_t> out;
+      const auto& mpe = m->mlparentelement;
+      const bool have = mpe.Size() >= static_cast<size_t>(m->GetNE());
+      int64_t e = 1;
+      for (auto ei : m->VolumeElements().Range())
+      {
+        if (have && mpe[ei].IsValid())
+          out.push_back(static_cast<int64_t>(mpe[ei]) + 1);  // 0-based -> 1-based
+        else
+          out.push_back(e);
+        ++e;
+      }
+      return out;
+    });
+
+    // Parent surface-element id per surface element (Mesh::mlparentsurfaceelement),
+    // 1-based; same bisection-only caveat and identity fallback as the volume map.
+    mod.method("surface_parent_indices", [](const MeshPtr& m) {
+      jlcxx::Array<int64_t> out;
+      const auto& mps = m->mlparentsurfaceelement;
+      const bool have = mps.Size() >= static_cast<size_t>(m->GetNSE());
+      int64_t e = 1;
+      for (auto si : m->SurfaceElements().Range())
+      {
+        if (have && mps[si].IsValid())
+          out.push_back(static_cast<int64_t>(mps[si]) + 1);
+        else
+          out.push_back(e);
+        ++e;
+      }
+      return out;
+    });
+
+    // Vertex count at each refinement level (Mesh::level_nv): level_vertex_counts
+    // [k] is the number of vertices at level k (k=0 coarse). Empty before any
+    // refinement; length nlevels+1 after nlevels uniform refinements.
+    mod.method("level_vertex_counts", [](const MeshPtr& m) {
+      jlcxx::Array<int64_t> out;
+      for (size_t i = 0; i < m->level_nv.Size(); i++)
+        out.push_back(static_cast<int64_t>(m->level_nv[i]));
+      return out;
     });
   }
 }

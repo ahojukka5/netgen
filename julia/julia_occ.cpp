@@ -73,6 +73,8 @@ namespace netgen_julia
       auto mesh = std::make_shared<Mesh>();
       mesh->SetGeometry(geo);
       geo->GenerateMesh(mesh, mp);
+      mesh->SetGeometry(geo);
+      mesh->geomtype = Mesh::GEOM_OCC;
       return mesh;
     });
   }
