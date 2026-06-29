@@ -1,11 +1,13 @@
 /*
   Experimental, opt-in Julia entry point for Netgen (built only with USE_JULIA=ON).
 
-  This mirrors the existing Python entry point ng/netgenpy.cpp, but uses
-  CxxWrap/JlCxx instead of pybind11. For this first sprint it is intentionally a
-  minimal smoke module: it wraps a single trivial function so that we can prove
-  the build, load and call path from Julia works end to end. No Netgen classes
-  are wrapped yet.
+  This mirrors the idea of the Python entry point ng/netgenpy.cpp, but uses
+  CxxWrap/JlCxx instead of pybind11. It is the single CxxWrap module definition;
+  the actual bindings live in the ExportJulia* functions called below. The
+  wrapped surface is intentionally small (see julia/README.md): two trivial
+  smoke functions, basic meshing value types, a Mesh handle with read-only
+  extraction, and a minimal CSG mesh-generation path. It is not a full Netgen
+  Julia API.
 */
 
 #include <string>

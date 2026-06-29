@@ -2,8 +2,9 @@
 #define NETGEN_JULIA_MESH_HPP
 
 // Julia (CxxWrap/JlCxx) binding for a minimal netgen::Mesh handle: lifetime via
-// std::shared_ptr (the same holder Python uses), construction/loading, saving
-// and read-only count queries. No coordinate or connectivity extraction yet.
+// std::shared_ptr (the same holder Python uses), construction/loading, saving,
+// read-only count queries, and read-only bulk extraction of coordinates and
+// element connectivity/types.
 
 #include <jlcxx/jlcxx.hpp>
 

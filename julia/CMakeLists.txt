@@ -1,10 +1,13 @@
 # Experimental, opt-in Julia bindings for Netgen.
 #
-# Enabled only with -DUSE_JULIA=ON (see the top-level CMakeLists.txt). This is a
-# minimal CxxWrap/JlCxx skeleton that mirrors the optional Python binding target
-# (python/ and ng/netgenpy.cpp). For now it builds a single shared library
-# (libngjl) exposing one trivial smoke function; it deliberately does not link
-# nglib or wrap any Netgen classes yet.
+# Enabled only with -DUSE_JULIA=ON (see the top-level CMakeLists.txt). Built with
+# CxxWrap/JlCxx, this mirrors the idea of the optional Python binding (python/ and
+# ng/netgenpy.cpp) but does not use pybind11 or libngpy. It builds a single shared
+# library (libngjl) that links nglib and currently wraps a small, deliberately
+# incomplete slice of Netgen: basic meshing value types (Point3d, Vec3d,
+# MeshingParameters), a shared_ptr<Mesh> handle with load/save and read-only
+# bulk extraction, and a minimal CSG mesh-generation path. It is not a full
+# Netgen Julia API. See README.md for the visibility/export rationale.
 #
 # To configure, point CMake at the JlCxx package shipped with the Julia CxxWrap
 # artifact, e.g.:
