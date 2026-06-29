@@ -1,0 +1,62 @@
+#include "julia_occ.hpp"
+
+#include <stdexcept>
+#include <string>
+
+// netgen::OCCGeometry and the LoadOCC_* loaders (libsrc/occ/occgeom.hpp). The
+// OCCGeometry class and these loaders are already exported from nglib
+// (DLL_HEADER), so this binding needs no new exported symbols. Requires the
+// OCCGEOMETRY macro (set globally when USE_OCC=ON).
+#include <occgeom.hpp>
+
+namespace netgen_julia
+{
+  using netgen::OCCGeometry;
+  using netgen::Mesh;
+  using netgen::MeshingParameters;
+  using OCCPtr = std::shared_ptr<OCCGeometry>;
+  using MeshPtr = std::shared_ptr<Mesh>;
+
+  namespace
+  {
+    bool ends_with(const std::string& s, const std::string& suffix)
+    {
+      return s.size() >= suffix.size() &&
+             s.compare(s.size() - suffix.size(), suffix.size(), suffix) == 0;
+    }
+  }
+
+  void ExportJuliaOCC(jlcxx::Module& mod)
+  {
+    mod.add_type<OCCGeometry>("OCCGeometry");
+
+    // Load an OCC geometry, dispatching on the file extension exactly as the
+    // Python OCCGeometry(filename) constructor does. The LoadOCC_* loaders
+    // return a fully set-up OCCGeometry* (BuildFMap/CalcBoundingBox done); we
+    // adopt it into a shared_ptr (the holder Python also uses).
+    mod.method("load_occ_geometry", [](const std::string& filename) -> OCCPtr {
+      OCCPtr geo;
+      if (ends_with(filename, ".step") || ends_with(filename, ".stp"))
+        geo.reset(netgen::LoadOCC_STEP(filename));
+      else if (ends_with(filename, ".brep"))
+        geo.reset(netgen::LoadOCC_BREP(filename));
+      else if (ends_with(filename, ".iges") || ends_with(filename, ".igs"))
+        geo.reset(netgen::LoadOCC_IGES(filename));
+      else
+        throw std::runtime_error(
+            "Unsupported OCC file '" + filename +
+            "' (expected .step/.stp/.brep/.iges/.igs)");
+      return geo;
+    });
+
+    // generate_mesh overload for OCCGeometry. CxxWrap dispatches on the geometry
+    // type, so this coexists with the CSGeometry generate_mesh. GenerateMesh is
+    // the (inherited) NetgenGeometry method, dispatched through OCCGeometry's
+    // exported vtable; it allocates and fills the mesh.
+    mod.method("generate_mesh", [](const OCCPtr& geo, MeshingParameters& mp) -> MeshPtr {
+      MeshPtr mesh;
+      geo->GenerateMesh(mesh, mp);
+      return mesh;
+    });
+  }
+}
