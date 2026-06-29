@@ -21,6 +21,7 @@ set(NGJL_SOURCES
   netgenjl.cpp
   julia_meshing.cpp
   julia_mesh.cpp
+  julia_topology.cpp
   julia_csg.cpp
 )
 
