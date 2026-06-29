@@ -129,6 +129,46 @@ tet2 = NetgenJL.load_mesh(tmp2)
 @assert reshape(NetgenJL.surface_connectivity_flat(tet2), :, 4) == sconn
 rm(tmp2; force=true)
 
+# --- Sprint 4: CSG geometry + mesh generation ------------------------------
+# Mesh the unit cube via a CSG OrthoBrick. Counts depend on maxh, so we assert
+# structural properties (positive counts, element types, bounding box) rather
+# than exact numbers.
+geo = NetgenJL.unit_cube_geometry()
+@assert NetgenJL.num_top_level_objects(geo) == 1
+
+genmp = NetgenJL.MeshingParameters()
+NetgenJL.set_maxh!(genmp, 0.5)
+gen = NetgenJL.generate_mesh(geo, genmp)
+gnp = NetgenJL.num_points(gen)
+gne = NetgenJL.num_volume_elements(gen)
+gnse = NetgenJL.num_surface_elements(gen)
+@assert gnp > 4
+@assert gne > 0
+@assert gnse > 0
+
+# Volume is all tetrahedra, boundary all triangles.
+@assert all(==(20), collect(NetgenJL.volume_element_types(gen)))   # 20 == TET
+@assert all(==(10), collect(NetgenJL.surface_element_types(gen)))  # 10 == TRIG
+
+# Generated coordinates lie within the unit cube.
+gcoords = reshape(NetgenJL.point_coordinates_flat(gen), 3, gnp)
+@assert all(-1e-9 .<= gcoords .<= 1 + 1e-9)
+
+# Finer maxh yields at least as many points (sanity of parameter plumbing).
+genmp2 = NetgenJL.MeshingParameters()
+NetgenJL.set_maxh!(genmp2, 0.25)
+gen2 = NetgenJL.generate_mesh(geo, genmp2)
+@assert NetgenJL.num_points(gen2) >= gnp
+
+# Generated mesh survives a save/load roundtrip with identical counts.
+gtmp = tempname() * ".vol"
+NetgenJL.save_mesh(gen, gtmp)
+genrt = NetgenJL.load_mesh(gtmp)
+@assert NetgenJL.num_points(genrt) == gnp
+@assert NetgenJL.num_volume_elements(genrt) == gne
+@assert NetgenJL.num_surface_elements(genrt) == gnse
+rm(gtmp; force=true)
+
 println("Netgen Julia smoke test passed:")
 println("  netgen_julia_smoke() = ", NetgenJL.netgen_julia_smoke())
 println("  netgen_julia_hello() = \"", NetgenJL.netgen_julia_hello(), "\"")
@@ -144,3 +184,5 @@ println("  Unit tet np/ne/nse   = ", NetgenJL.num_points(tet), "/",
 println("  Tet volume element   = ", vec(vconn), " (", NetgenJL.element_type_name(vtypes[1]),
         ", 1-based); surface = 4x ", NetgenJL.element_type_name(stypes[1]),
         "; extraction roundtrip OK")
+println("  CSG unit cube (maxh 0.5) np/ne/nse = ", gnp, "/", gne, "/", gnse,
+        " (all TET/TRIG); generated-mesh roundtrip OK")
