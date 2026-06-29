@@ -6,8 +6,8 @@
   the actual bindings live in the ExportJulia* functions called below. The
   wrapped surface is intentionally small (see julia/README.md): two trivial
   smoke functions, basic meshing value types, a Mesh handle with read-only
-  extraction, and a minimal CSG mesh-generation path. It is not a full Netgen
-  Julia API.
+  extraction, a minimal CSG mesh-generation path, and (only when USE_OCC=ON)
+  minimal OCC file import. It is not a full Netgen Julia API.
 */
 
 #include <string>
