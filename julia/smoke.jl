@@ -326,6 +326,99 @@ NetgenJL.uniform_refine!(t0)
 @assert NetgenJL.num_faces(t0) > tnf0
 @assert all(1 .<= NetgenJL.volume_to_edge_flat(t0) .<= NetgenJL.num_edges(t0))
 
+# --- Sprint 9: geometry-backed mesh hierarchy -------------------------------
+# Every hierarchy level must support all generic extraction + topology APIs.
+function assert_level_extractable(mesh)
+    np = NetgenJL.num_points(mesh)
+    ne = NetgenJL.num_volume_elements(mesh)
+    nse = NetgenJL.num_surface_elements(mesh)
+    @assert length(NetgenJL.point_coordinates_flat(mesh)) == 3 * np
+    @assert length(NetgenJL.volume_connectivity_flat(mesh)) > 0
+    @assert length(NetgenJL.volume_element_types(mesh)) == ne
+    @assert length(NetgenJL.surface_connectivity_flat(mesh)) > 0
+    @assert length(NetgenJL.surface_element_types(mesh)) == nse
+    @assert NetgenJL.num_edges(mesh) > 0 && NetgenJL.num_faces(mesh) > 0
+    @assert length(NetgenJL.edge_connectivity_flat(mesh)) == 2 * NetgenJL.num_edges(mesh)
+    @assert length(NetgenJL.face_connectivity_flat(mesh)) > 0
+    @assert length(NetgenJL.volume_to_edge_flat(mesh)) > 0
+    @assert length(NetgenJL.volume_to_face_flat(mesh)) > 0
+    @assert length(NetgenJL.volume_to_edge_orientation_flat(mesh)) ==
+            length(NetgenJL.volume_to_edge_flat(mesh))
+    @assert length(NetgenJL.surface_to_face_flat(mesh)) == nse
+end
+
+# Explicit, generic hierarchy idiom (copy_mesh preserves geometry + geomtype).
+function build_hierarchy(m0, n)
+    levels = Any[m0]
+    for _ in 1:n
+        mk = NetgenJL.copy_mesh(levels[end])
+        NetgenJL.uniform_refine!(mk)
+        push!(levels, mk)
+    end
+    return levels
+end
+
+function roundtrip_counts_ok(mesh)
+    f = tempname() * ".vol"
+    NetgenJL.save_mesh(mesh, f)
+    r = NetgenJL.load_mesh(f)
+    ok = NetgenJL.num_points(r) == NetgenJL.num_points(mesh) &&
+         NetgenJL.num_volume_elements(r) == NetgenJL.num_volume_elements(mesh) &&
+         NetgenJL.num_surface_elements(r) == NetgenJL.num_surface_elements(mesh)
+    rm(f; force=true)
+    return ok
+end
+
+# Sphere hierarchy: geometry-aware snapping must hold on every refined level.
+sgeo9 = NetgenJL.sphere_geometry(0.0, 0.0, 0.0, 1.0)
+smp9 = NetgenJL.MeshingParameters(); NetgenJL.set_maxh!(smp9, 0.6)
+sm0 = NetgenJL.generate_mesh(sgeo9, smp9)
+sm0_np = NetgenJL.num_points(sm0)
+slevels = build_hierarchy(sm0, 3)
+@assert length(slevels) == 4
+@assert NetgenJL.num_points(sm0) == sm0_np            # input mesh not mutated
+for k in 1:4
+    L = slevels[k]
+    @assert NetgenJL.geometry_type_name(L) == "csg"
+    @assert NetgenJL.has_geometry(L)
+    assert_level_extractable(L)
+    @assert maximum(abs.(boundary_radii(L, 0.0, 0.0, 0.0) .- 1.0)) < 1e-6  # on sphere
+    @assert roundtrip_counts_ok(L)
+    if k > 1
+        P = slevels[k - 1]
+        @assert NetgenJL.num_points(L) > NetgenJL.num_points(P)
+        @assert NetgenJL.num_volume_elements(L) > NetgenJL.num_volume_elements(P)
+        @assert NetgenJL.num_edges(L) > NetgenJL.num_edges(P)
+        @assert NetgenJL.num_faces(L) > NetgenJL.num_faces(P)
+        # each refined level records exactly its own single refinement step.
+        @assert collect(NetgenJL.level_vertex_counts(L)) ==
+                [NetgenJL.num_points(P), NetgenJL.num_points(L)]
+    end
+end
+
+# Cube hierarchy: parent maps coherent across levels + P1 nodal transfer exact.
+cgeo9 = NetgenJL.unit_cube_geometry()
+cmp9 = NetgenJL.MeshingParameters(); NetgenJL.set_maxh!(cmp9, 0.5)
+cm0 = NetgenJL.generate_mesh(cgeo9, cmp9)
+clevels = build_hierarchy(cm0, 3)
+ufun9(x, y, z) = 2 - x + 0.25y + 3z
+for k in 2:4
+    P = clevels[k - 1]; L = clevels[k]
+    npP = NetgenJL.num_points(P); npL = NetgenJL.num_points(L)
+    par = reshape(NetgenJL.point_parent_vertices_flat(L), 2, npL)
+    @assert all(1 .<= par .<= npP)                    # parents index the coarser level
+    @assert all(par[1, p] == p && par[2, p] == p for p in 1:npP)   # coarse -> self
+    @assert any(par[1, p] != par[2, p] for p in 1:npL)             # has midpoints
+    # P1 transfer: parent pairs reproduce a linear function exactly on flat geom.
+    cP = reshape(NetgenJL.point_coordinates_flat(P), 3, npP)
+    cL = reshape(NetgenJL.point_coordinates_flat(L), 3, npL)
+    uP = [ufun9(cP[:, p]...) for p in 1:npP]
+    uL = [par[1, p] == par[2, p] ? uP[par[1, p]] : 0.5 * (uP[par[1, p]] + uP[par[2, p]])
+          for p in 1:npL]
+    uExact = [ufun9(cL[:, p]...) for p in 1:npL]
+    @assert maximum(abs.(uL .- uExact)) < 1e-10
+end
+
 # --- Sprint 5: optional OCC import (present only if built with USE_OCC) ------
 # Skipped cleanly if OCC was not compiled in or no fixture is provided via
 # NGJL_OCC_FIXTURE (e.g. an existing tracked file such as tutorials/screw.step).
@@ -370,8 +463,21 @@ if isdefined(NetgenJL, :load_occ_geometry)
         # Topology extraction works on the OCC-generated mesh.
         @assert NetgenJL.num_edges(omesh) > 0
         @assert NetgenJL.num_faces(omesh) >= NetgenJL.num_surface_elements(omesh)
+        @assert NetgenJL.geometry_type_name(omesh) == "occ"
 
-        # Uniform refinement also works on an OCC-generated mesh.
+        # Two-level OCC hierarchy: each level is extractable and saveable.
+        olevels = build_hierarchy(omesh, 2)
+        @assert length(olevels) == 3
+        @assert NetgenJL.num_points(omesh) == onp      # input not mutated
+        for k in 1:3
+            assert_level_extractable(olevels[k])
+            @assert roundtrip_counts_ok(olevels[k])
+            if k > 1
+                @assert NetgenJL.num_points(olevels[k]) > NetgenJL.num_points(olevels[k - 1])
+            end
+        end
+
+        # Uniform refinement also works in place on an OCC-generated mesh.
         NetgenJL.uniform_refine!(omesh)
         @assert NetgenJL.num_points(omesh) > onp
         @assert NetgenJL.num_surface_elements(omesh) > onse
@@ -409,4 +515,7 @@ println("  Curved refine: sphere boundary nodes stay on r=1 after refine ",
 println("  Topology: unit tet 6 edges / 4 faces (edge orientations verified); ",
         "CSG cube edges ", tne0, " -> ", NetgenJL.num_edges(t0),
         ", faces ", tnf0, " -> ", NetgenJL.num_faces(t0), " under refine")
+println("  Hierarchy (4 levels): sphere np ",
+        [NetgenJL.num_points(L) for L in slevels],
+        " (boundary on r=1, extract+save/load OK); cube parent-map P1 exact per level")
 println("  OCC import: ", occ_summary)

@@ -56,6 +56,39 @@ by `nglib`. The Julia OCC glue is built only when `USE_OCC=ON`
 (`julia_occ.cpp`, guarded by the `NGJL_HAS_OCC` compile definition) and links
 the OpenCASCADE libraries via Netgen's `occ_libs` target.
 
+## Geometry-backed hierarchies
+
+Meshes generated from a CSG or OCC geometry retain the Netgen geometry handle,
+and `uniform_refine!` refines *through* that geometry — new boundary points are
+projected onto the true surface (e.g. a refined sphere mesh keeps its boundary
+nodes on the sphere). `copy_mesh` preserves both the geometry handle and the
+`geomtype` tag, so a copied mesh refines the same way.
+
+Build a multi-level hierarchy with the explicit, generic idiom:
+
+```julia
+m0 = generate_mesh(geo, mp)            # level 0 (geometry-backed)
+levels = Any[m0]
+for _ in 1:nlevels
+    m = copy_mesh(levels[end])
+    uniform_refine!(m)                 # geometry-aware refinement
+    push!(levels, m)
+end
+```
+
+A `uniform_refinement_hierarchy(mesh, nlevels)` returning a vector of mesh
+handles was considered but intentionally not added: CxxWrap has no factory for
+`std::vector<std::shared_ptr<Mesh>>`, and registering one is more ceremony than
+the explicit loop above warrants.
+
+Each level supports the full generic extraction surface — coordinates,
+connectivity/types, refinement parent maps (`point_parent_vertices_flat`, …) and
+topology/incidence (`num_edges`, `volume_to_edge_flat`, orientations, …). These
+are **generic data**, not transfer/prolongation operators: this binding exposes
+mesh, hierarchy and incidence information and deliberately implements no
+solver-level multigrid. Downstream codes build their own transfer operators from
+the parent maps and incidence relations.
+
 ## Symbol visibility / export notes
 
 Two visibility details are worth understanding for review:

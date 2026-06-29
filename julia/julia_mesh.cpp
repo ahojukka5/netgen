@@ -248,6 +248,14 @@ namespace netgen_julia
     mod.method("uniform_refine!", [](const MeshPtr& m) {
       m->GetGeometry()->GetRefinement().Refine(*m);
     });
+    // NOTE: a uniform_refinement_hierarchy returning std::vector<shared_ptr<Mesh>>
+    // was considered but not added: CxxWrap has no factory for that container
+    // (it breaks module registration) and registering one is more ceremony than
+    // it is worth. The generic idiom is to build levels explicitly in Julia:
+    //   levels = Any[m0]
+    //   for _ in 1:n; m = copy_mesh(levels[end]); uniform_refine!(m); push!(levels, m); end
+    // copy_mesh preserves the geometry handle and geomtype, so every level stays
+    // geometry-backed.
 
     // --- geometry diagnostics ----------------------------------------------
     // Broad kind of geometry the mesh was generated from. Mesh::GetGeometry()
