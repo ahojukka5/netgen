@@ -67,11 +67,12 @@ Two visibility details are worth understanding for review:
 2. **CSG required a few additional exported symbols.** `libngjl` is a *separate*
    shared library, so it can only call symbols that `nglib` exports
    (`DLL_HEADER`). Most of the Mesh / MeshingParameters API is already exported,
-   but constructing a CSG geometry needed three small `DLL_HEADER` additions in
-   the CSG headers: the `OrthoBrick(Point,Point)` and `Solid(Primitive*)`
-   constructors and the `Solid` block-allocator static used by `Solid`'s inline
-   `operator new`. These are additive visibility annotations only; the default
-   build is behaviourally unchanged.
+   but constructing a CSG geometry needed a few small `DLL_HEADER` additions in
+   the CSG headers: the `OrthoBrick(Point,Point)`, `Sphere(Point,double)` and
+   `Solid(Primitive*)` constructors and the `Solid` block-allocator static used
+   by `Solid`'s inline `operator new`. These are additive visibility annotations
+   only; the default build is behaviourally unchanged. (OCC needed no new
+   exports — `OCCGeometry` and the `LoadOCC_*` loaders are already exported.)
 
    The Python binding avoids such exports because `python_*.cpp` is compiled
    *into* `nglib`, so it links the internal (hidden) symbols directly.

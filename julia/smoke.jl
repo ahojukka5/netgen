@@ -208,6 +208,75 @@ NetgenJL.uniform_refine!(r0)
 rne2 = NetgenJL.num_volume_elements(r0)
 @assert rne2 > rne1
 
+# --- Sprint 7: geometry diagnostics + refinement parent maps ----------------
+# Geometry-backed mesh reports its broad geometry kind; copy_mesh preserves it.
+h0 = NetgenJL.generate_mesh(geo, genmp)              # fresh unit-cube mesh
+@assert NetgenJL.geometry_type_name(h0) == "csg"
+@assert NetgenJL.has_geometry(h0) == true
+@assert isempty(collect(NetgenJL.level_vertex_counts(h0)))   # not yet refined
+
+h1 = NetgenJL.copy_mesh(h0)
+@assert NetgenJL.geometry_type_name(h1) == "csg"     # geometry tag preserved
+hnp0 = NetgenJL.num_points(h0)
+NetgenJL.uniform_refine!(h1)                          # geometry-aware refinement
+hnp1 = NetgenJL.num_points(h1)
+@assert NetgenJL.num_points(h0) == hnp0               # copy did not touch original
+
+# Point parent pairs: 2 x np, 1-based, coarse nodes map to themselves.
+parents = reshape(NetgenJL.point_parent_vertices_flat(h1), 2, hnp1)
+@assert size(parents) == (2, hnp1)
+@assert all(1 .<= parents .<= hnp1)
+@assert all(parents[1, p] == p && parents[2, p] == p for p in 1:hnp0)   # coarse -> self
+newnodes = [p for p in 1:hnp1 if parents[1, p] != parents[2, p]]
+@assert !isempty(newnodes)                            # midpoints have two parents
+@assert all(p > hnp0 for p in newnodes)
+
+# level_vertex_counts after one refinement: [coarse_nv, fine_nv].
+@assert collect(NetgenJL.level_vertex_counts(h1)) == [hnp0, hnp1]
+
+# Volume/surface parent ids: length matches element count, ids in range.
+# (Uniform refinement records point ancestry, not element ancestry, so these
+#  fall back to identity; see julia_mesh.cpp.)
+hvp = NetgenJL.volume_parent_indices(h1)
+hsp = NetgenJL.surface_parent_indices(h1)
+@assert length(hvp) == NetgenJL.num_volume_elements(h1)
+@assert all(1 .<= hvp .<= NetgenJL.num_volume_elements(h1))
+@assert length(hsp) == NetgenJL.num_surface_elements(h1)
+
+# P1 nodal transfer sanity on flat geometry: parent pairs must reproduce a
+# linear function exactly. NOT a prolongation API -- a coherence check only.
+ufun(x, y, z) = 1 + 2x - 3y + 0.5z
+c0 = reshape(NetgenJL.point_coordinates_flat(h0), 3, hnp0)
+c1 = reshape(NetgenJL.point_coordinates_flat(h1), 3, hnp1)
+u0 = [ufun(c0[:, p]...) for p in 1:hnp0]
+uf = [parents[1, p] == parents[2, p] ? u0[parents[1, p]] :
+      0.5 * (u0[parents[1, p]] + u0[parents[2, p]]) for p in 1:hnp1]
+uexact = [ufun(c1[:, p]...) for p in 1:hnp1]
+p1_err = maximum(abs.(uf .- uexact))
+@assert p1_err < 1e-10
+
+# Curved geometry: refining a sphere mesh must project new boundary points onto
+# the true sphere (geometry-aware refinement), so all boundary nodes stay at
+# radius r. Without projection, refined chord-midpoints would fall inside (r<1).
+function boundary_radii(mesh, cx, cy, cz)
+    npts = NetgenJL.num_points(mesh)
+    nse = NetgenJL.num_surface_elements(mesh)
+    coords = reshape(NetgenJL.point_coordinates_flat(mesh), 3, npts)
+    sconn = reshape(NetgenJL.surface_connectivity_flat(mesh), :, nse)
+    bnodes = filter(>(0), unique(vec(sconn)))
+    [sqrt((coords[1, p] - cx)^2 + (coords[2, p] - cy)^2 + (coords[3, p] - cz)^2)
+     for p in bnodes]
+end
+sgeo = NetgenJL.sphere_geometry(0.0, 0.0, 0.0, 1.0)
+sphmp = NetgenJL.MeshingParameters(); NetgenJL.set_maxh!(sphmp, 0.5)
+sm0 = NetgenJL.generate_mesh(sgeo, sphmp)
+snp0 = NetgenJL.num_points(sm0)
+sm1 = NetgenJL.copy_mesh(sm0)
+NetgenJL.uniform_refine!(sm1)
+@assert NetgenJL.num_points(sm1) > snp0
+sphere_err = maximum(abs.(boundary_radii(sm1, 0.0, 0.0, 0.0) .- 1.0))
+@assert sphere_err < 1e-6        # boundary nodes snapped to the sphere
+
 # --- Sprint 5: optional OCC import (present only if built with USE_OCC) ------
 # Skipped cleanly if OCC was not compiled in or no fixture is provided via
 # NGJL_OCC_FIXTURE (e.g. an existing tracked file such as tutorials/screw.step).
@@ -278,4 +347,9 @@ println("  CSG unit cube (maxh 0.5) np/ne/nse = ", gnp, "/", gne, "/", gnse,
         " (all TET/TRIG); generated-mesh roundtrip OK")
 println("  Uniform refine: ne ", rne0, " -> ", rne1, " -> ", rne2,
         " (copy_mesh deep-copies; extraction/save+load OK after refine)")
+println("  Hierarchy: geometry='", NetgenJL.geometry_type_name(h1), "', levels ",
+        collect(NetgenJL.level_vertex_counts(h1)), ", ", length(newnodes),
+        " midpoints; P1 nodal transfer max err = ", p1_err)
+println("  Curved refine: sphere boundary nodes stay on r=1 after refine ",
+        "(max |r-1| = ", sphere_err, ", geometry-aware snapping)")
 println("  OCC import: ", occ_summary)
