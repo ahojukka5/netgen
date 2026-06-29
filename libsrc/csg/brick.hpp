@@ -131,7 +131,10 @@ namespace netgen
   protected:
     Point<3> pmin, pmax;
   public:
-    OrthoBrick (const Point<3> & ap1, const Point<3> & ap2);
+    // DLL_HEADER: export so external C++ language bindings (e.g. the optional
+    // Julia binding) can construct this primitive; nglib is built with hidden
+    // visibility by default.
+    DLL_HEADER OrthoBrick (const Point<3> & ap1, const Point<3> & ap2);
     // default constructor for archive
     OrthoBrick() {}
 

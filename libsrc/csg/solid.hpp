@@ -73,7 +73,10 @@ namespace netgen
     // static int cntnames;
 
   public:
-    Solid (Primitive * aprim);
+    // DLL_HEADER: export so external C++ language bindings (e.g. the optional
+    // Julia binding) can wrap a primitive in a Solid; nglib is built with hidden
+    // visibility by default.
+    DLL_HEADER Solid (Primitive * aprim);
     Solid (optyp aop, Solid * as1, Solid * as2 = NULL);
     // default constructor for archive
     Solid () {}
@@ -192,8 +195,11 @@ namespace netgen
     static Solid * CreateSolid (istream & ist, const SymbolTable<Solid*> & solids);
 
 
-    static shared_ptr<BlockAllocator> ball;
-    void * operator new(size_t /* s */) 
+    // DLL_HEADER: Solid's inline operator new/delete use this block allocator, so
+    // it must be visible to external bindings that construct a Solid (see the
+    // exported Solid(Primitive*) constructor above).
+    DLL_HEADER static shared_ptr<BlockAllocator> ball;
+    void * operator new(size_t /* s */)
     {
       return ball->Alloc();
     }
