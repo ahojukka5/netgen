@@ -124,6 +124,14 @@ namespace netgen_julia
         types.push_back(static_cast<int32_t>(el.GetType()));
       return types;
     });
+    // Per-volume-element sub-domain / material index (Element::GetIndex()),
+    // complementing surface_element_indices (the face-descriptor index).
+    mod.method("volume_element_indices", [](const MeshPtr& m) {
+      jlcxx::Array<int32_t> idx;
+      for (const auto& el : m->VolumeElements())
+        idx.push_back(static_cast<int32_t>(el.GetIndex()));
+      return idx;
+    });
 
     // Surface elements: connectivity, ELEMENT_TYPE ids (TRIG=10, QUAD=11, ...)
     // and the face-descriptor index per element (Element2d::GetIndex()).
@@ -217,6 +225,26 @@ namespace netgen_julia
         m->AddSurfaceElement(tri);
       }
       return m;
+    });
+
+    // --- refinement / hierarchy --------------------------------------------
+    // Deep copy of a mesh (Mesh::operator=). Lets callers build a hierarchy of
+    // distinct meshes by copying then refining, since uniform_refine! mutates in
+    // place.
+    mod.method("copy_mesh", [](const MeshPtr& m) -> MeshPtr {
+      auto c = std::make_shared<Mesh>();
+      *c = *m;
+      return c;
+    });
+
+    // In-place uniform refinement. Uses the mesh's geometry refinement, which
+    // projects new boundary points onto the true geometry when one is attached
+    // (CSG/OCC generated meshes), or a default refinement otherwise
+    // (Mesh::GetGeometry() never returns null). Netgen records the refinement
+    // hierarchy on the mesh (public mlbetweennodes / mlparentelement /
+    // mlparentsurfaceelement arrays) for possible later extraction.
+    mod.method("uniform_refine!", [](const MeshPtr& m) {
+      m->GetGeometry()->GetRefinement().Refine(*m);
     });
   }
 }
