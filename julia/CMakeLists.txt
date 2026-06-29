@@ -17,11 +17,32 @@
 
 find_package(JlCxx CONFIG REQUIRED)
 
-add_library(ngjl SHARED netgenjl.cpp julia_meshing.cpp julia_mesh.cpp julia_csg.cpp)
+set(NGJL_SOURCES
+  netgenjl.cpp
+  julia_meshing.cpp
+  julia_mesh.cpp
+  julia_csg.cpp
+)
+
+# OCC support is conditional: the non-OCC binding (meshing + Mesh + CSG) always
+# builds; OCC import is added only when USE_OCC=ON.
+if(USE_OCC)
+  list(APPEND NGJL_SOURCES julia_occ.cpp)
+endif(USE_OCC)
+
+add_library(ngjl SHARED ${NGJL_SOURCES})
 target_compile_features(ngjl PRIVATE cxx_std_17)
 # JlCxx for the binding glue; nglib provides the out-of-line Netgen symbols
 # (e.g. MeshingParameters' constructor). Point3d/Vec3d are header-only.
 target_link_libraries(ngjl PRIVATE JlCxx::cxxwrap_julia nglib)
+
+if(USE_OCC)
+  # OCCGeometry and the LoadOCC_* loaders are already exported by nglib; we just
+  # need the OpenCASCADE headers/libs and the NGJL_HAS_OCC switch. (-DOCCGEOMETRY
+  # is already added globally by the top-level CMakeLists when USE_OCC=ON.)
+  target_compile_definitions(ngjl PRIVATE NGJL_HAS_OCC)
+  target_link_libraries(ngjl PRIVATE occ_libs)
+endif(USE_OCC)
 
 # Netgen builds with hidden symbol visibility by default (CMAKE_CXX_VISIBILITY_PRESET
 # in the top-level CMakeLists.txt). CxxWrap/JlCxx relies on *default* visibility so

@@ -17,6 +17,9 @@
 #include "julia_meshing.hpp"
 #include "julia_mesh.hpp"
 #include "julia_csg.hpp"
+#ifdef NGJL_HAS_OCC
+#include "julia_occ.hpp"
+#endif
 
 namespace netgen_julia
 {
@@ -46,4 +49,9 @@ JLCXX_MODULE define_julia_module(jlcxx::Module& mod)
 
   // Minimal CSG geometry + mesh generation (unit cube / axis-aligned box).
   netgen_julia::ExportJuliaCSG(mod);
+
+#ifdef NGJL_HAS_OCC
+  // Minimal OCC import (STEP/BREP/IGES -> OCCGeometry -> GenerateMesh).
+  netgen_julia::ExportJuliaOCC(mod);
+#endif
 }
