@@ -169,6 +169,45 @@ genrt = NetgenJL.load_mesh(gtmp)
 @assert NetgenJL.num_surface_elements(genrt) == gnse
 rm(gtmp; force=true)
 
+# --- Sprint 6: uniform refinement, copy, after-refine extraction ------------
+r0 = NetgenJL.generate_mesh(geo, genmp)          # fresh unit-cube mesh (maxh 0.5)
+rnp0 = NetgenJL.num_points(r0)
+rne0 = NetgenJL.num_volume_elements(r0)
+
+# copy_mesh is a deep copy: refining the copy leaves the original untouched.
+rcopy = NetgenJL.copy_mesh(r0)
+NetgenJL.uniform_refine!(rcopy)
+@assert NetgenJL.num_points(r0) == rnp0
+@assert NetgenJL.num_volume_elements(rcopy) > rne0
+
+# in-place uniform refinement grows the mesh.
+NetgenJL.uniform_refine!(r0)
+rnp1 = NetgenJL.num_points(r0)
+rne1 = NetgenJL.num_volume_elements(r0)
+@assert rnp1 > rnp0
+@assert rne1 > rne0
+
+# extraction still works (and stays consistent) after refinement.
+rcoords = NetgenJL.point_coordinates_flat(r0)
+@assert length(rcoords) == 3 * rnp1
+@assert length(NetgenJL.volume_connectivity_flat(r0)) > 0
+@assert all(==(20), collect(NetgenJL.volume_element_types(r0)))      # still TET
+@assert length(NetgenJL.volume_element_indices(r0)) == rne1
+@assert all(-1e-9 .<= reshape(rcoords, 3, rnp1) .<= 1 + 1e-9)        # still in cube
+
+# save/load roundtrip works after refinement.
+rtmp = tempname() * ".vol"
+NetgenJL.save_mesh(r0, rtmp)
+r0b = NetgenJL.load_mesh(rtmp)
+@assert NetgenJL.num_points(r0b) == rnp1
+@assert NetgenJL.num_volume_elements(r0b) == rne1
+rm(rtmp; force=true)
+
+# second refinement level (explicit hierarchy step).
+NetgenJL.uniform_refine!(r0)
+rne2 = NetgenJL.num_volume_elements(r0)
+@assert rne2 > rne1
+
 # --- Sprint 5: optional OCC import (present only if built with USE_OCC) ------
 # Skipped cleanly if OCC was not compiled in or no fixture is provided via
 # NGJL_OCC_FIXTURE (e.g. an existing tracked file such as tutorials/screw.step).
@@ -210,7 +249,13 @@ if isdefined(NetgenJL, :load_occ_geometry)
         @assert ogeo_u !== nothing
         rm(upper; force=true)
 
-        occ_summary = "$(basename(fixture)) -> np/ne/nse = $onp/$one/$onse (roundtrip OK; uppercase-ext OK)"
+        # Uniform refinement also works on an OCC-generated mesh.
+        NetgenJL.uniform_refine!(omesh)
+        @assert NetgenJL.num_points(omesh) > onp
+        @assert NetgenJL.num_surface_elements(omesh) > onse
+
+        occ_summary = "$(basename(fixture)) -> np/ne/nse = $onp/$one/$onse " *
+                      "(roundtrip OK; uppercase-ext OK; refine -> $(NetgenJL.num_points(omesh)) pts)"
     end
 end
 
@@ -231,4 +276,6 @@ println("  Tet volume element   = ", vec(vconn), " (", NetgenJL.element_type_nam
         "; extraction roundtrip OK")
 println("  CSG unit cube (maxh 0.5) np/ne/nse = ", gnp, "/", gne, "/", gnse,
         " (all TET/TRIG); generated-mesh roundtrip OK")
+println("  Uniform refine: ne ", rne0, " -> ", rne1, " -> ", rne2,
+        " (copy_mesh deep-copies; extraction/save+load OK after refine)")
 println("  OCC import: ", occ_summary)
