@@ -14,6 +14,7 @@
 
 #include "julia_meshing.hpp"
 #include "julia_mesh.hpp"
+#include "julia_csg.hpp"
 
 namespace netgen_julia
 {
@@ -40,4 +41,7 @@ JLCXX_MODULE define_julia_module(jlcxx::Module& mod)
 
   // Minimal Mesh handle (shared_ptr lifetime), load/save and count queries.
   netgen_julia::ExportJuliaMesh(mod);
+
+  // Minimal CSG geometry + mesh generation (unit cube / axis-aligned box).
+  netgen_julia::ExportJuliaCSG(mod);
 }
