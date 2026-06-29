@@ -142,7 +142,10 @@ namespace netgen
     double r, invr;
   public:
     ///
-    Sphere (const Point<3> & ac, double ar);
+    // DLL_HEADER: export so external C++ language bindings (e.g. the optional
+    // Julia binding) can construct this primitive; nglib is built with hidden
+    // visibility by default (same pattern as OrthoBrick / Solid).
+    DLL_HEADER Sphere (const Point<3> & ac, double ar);
     // default constructor for archive
     Sphere() {}
 
